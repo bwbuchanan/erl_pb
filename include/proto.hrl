@@ -1,0 +1,8 @@
+-record(message, {name, entries, options=[]}).
+-record(extend, {name, entries, options=[]}).
+-record(field, {name, rule, type, id, default, options=[]}).
+-record(service, {name, entries, options=[]}).
+-record(method, {name, requestType, responseType, options=[]}).
+-record(enum, {name, values, options=[]}).
+-record(enum_value, {name, value, options=[]}).
+-record(group, {name, entries, options=[]}).
