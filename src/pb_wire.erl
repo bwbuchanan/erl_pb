@@ -8,6 +8,12 @@
 -define(TYPE_END_GROUP,   4).
 -define(TYPE_32BIT,       5).
 
+-type(pb_field_id() :: 0..16#3fffffff).
+-type(pb_type() :: double | float | int32 | int64 | uint32 | uint64 | sint32 |
+                   sint64 | fixed32 | fixed64 | sfixed32 | sfixed64 | bool |
+                   string | bytes).
+
+-spec(encode/3 :: (FieldID::pb_field_id(), Value::any(), Type::pb_type()) -> iolist()).
 encode(FieldID, false, bool) ->
     encode(FieldID, 0, bool);
 encode(FieldID, true, bool) ->
@@ -51,7 +57,8 @@ encode(FieldID, Float, float) when is_float(Float) ->
     [encode_field_tag(FieldID, ?TYPE_32BIT), <<Float:32/little-float>>];
 encode(FieldID, Float, double) when is_float(Float) ->
     [encode_field_tag(FieldID, ?TYPE_64BIT), <<Float:64/little-float>>].
-    
+
+-spec(decode/2 :: (binary(), pb_type()) -> any()).
 decode(Bytes, ExpectedType) ->
     {Tag, Rest1} = decode_varint(Bytes),
     FieldID = Tag bsr 3,

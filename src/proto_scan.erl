@@ -1,9 +1,13 @@
 -module(proto_scan).
 -export([scan/1]).
 
+-type(token() :: {atom(), pos_integer()} | {atom(), pos_integer(), any()}).
+
+-spec(scan/1 :: (string()) -> [token()]).
 scan(String) ->
     scan(String, [], 1).
 
+-spec(scan/3 :: (string(), [token()], pos_integer()) -> [token()]).
 scan([${|Rest], Accum, Line) ->
     scan(Rest, [{'{', Line}|Accum], Line);
 scan([$}|Rest], Accum, Line) ->
@@ -56,10 +60,11 @@ scan([C|_] = String, Accum, Line)
     end,
     scan(Rest, [Token|Accum], Line);
 scan([], Accum, Line) ->
-    lists:reverse([{'$end', Line}|Accum], Line);
+    lists:reverse([{'$end', Line}|Accum]);
 scan([C|_], _Accum, Line) ->
     erlang:error({invalid_character, [C], Line}).
 
+-spec(scan_identifier/1 :: (string()) -> {string(), string()}).
 scan_identifier(String) ->
     scan_identifier(String, "").
 
@@ -73,6 +78,7 @@ scan_identifier([C|Rest], Accum)
 scan_identifier(Rest, Accum) ->
     {lists:reverse(Accum), Rest}.
 
+-spec(scan_number/1 :: (string()) -> {number(), string()}).
 scan_number(String) ->
     {A, Rest1} = scan_integer(String),
     case Rest1 of
@@ -89,6 +95,7 @@ scan_number(String) ->
             {A, Rest1}
     end.
 
+-spec(scan_integer/1 :: (string()) -> {integer(), string()}).
 scan_integer(String) ->
     scan_integer(String, 0).
 
@@ -98,6 +105,7 @@ scan_integer([D|Rest], Accum)
 scan_integer(Rest, Accum) ->
     {Accum, Rest}.
 
+-spec(scan_string/2 :: (string(), pos_integer()) -> {string(), string(), pos_integer()}).
 scan_string([$"|String], Line) ->
     scan_string(String, "", Line).
 
