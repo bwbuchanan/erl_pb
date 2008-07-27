@@ -69,37 +69,29 @@ decode(Bytes, ExpectedType) ->
 decode_value(Bytes, ?TYPE_VARINT, ExpectedType) ->
     {Value, Rest} = decode_varint(Bytes),
     {typecast(Value, ExpectedType), Rest};
-decode_value(Bytes, ?TYPE_64BIT, fixed64) ->
-    <<Value:64/little-unsigned-integer, Rest/binary>> = Bytes,
+decode_value(<<Value:64/little-unsigned-integer, Rest/binary>>, ?TYPE_64BIT, fixed64) ->
     {Value, Rest};
-decode_value(Bytes, ?TYPE_64BIT, fixed32) ->
-    <<Value:32/little-unsigned-integer, _:32, Rest/binary>> = Bytes,
+decode_value(<<Value:32/little-unsigned-integer, _:32, Rest/binary>>, ?TYPE_64BIT, fixed32) ->
     {Value, Rest};
-decode_value(Bytes, ?TYPE_64BIT, sfixed64) ->
-    <<Value:64/little-signed-integer, Rest/binary>> = Bytes,
+decode_value(<<Value:64/little-signed-integer, Rest/binary>>, ?TYPE_64BIT, sfixed64) ->
     {Value, Rest};
-decode_value(Bytes, ?TYPE_64BIT, sfixed32) ->
-    <<Value:32/little-signed-integer, _:32, Rest/binary>> = Bytes,
+decode_value(<<Value:32/little-signed-integer, _:32, Rest/binary>>, ?TYPE_64BIT, sfixed32) ->
     {Value, Rest};
-decode_value(Bytes, ?TYPE_64BIT, Type)
+decode_value(<<Value:64/little-float, Rest/binary>>, ?TYPE_64BIT, Type)
   when Type =:= double; Type =:= float ->
-    <<Value:64/little-float, Rest/binary>> = Bytes,
     {Value, Rest};
 decode_value(Bytes, ?TYPE_STRING, ExpectedType)
   when ExpectedType =:= string; ExpectedType =:= bytes ->
-    {Length, Rest1} = decode_varint(Bytes),
-    split_binary(Rest1, Length);
-decode_value(Bytes, ?TYPE_32BIT, Type)
+    {Length, Rest} = decode_varint(Bytes),
+    split_binary(Rest, Length);
+decode_value(<<Value:32/little-unsigned-integer, Rest/binary>>, ?TYPE_32BIT, Type)
   when Type =:= fixed32; Type =:= fixed64 ->
-    <<Value:32/little-unsigned-integer, Rest/binary>> = Bytes,
     {Value, Rest};
-decode_value(Bytes, ?TYPE_32BIT, Type)
+decode_value(<<Value:32/little-signed-integer, Rest/binary>>, ?TYPE_32BIT, Type)
   when Type =:= sfixed32; Type =:= sfixed64 ->
-    <<Value:32/little-signed-integer, Rest/binary>> = Bytes,
     {Value, Rest};
-decode_value(Bytes, ?TYPE_32BIT, Type)
+decode_value(<<Value:32/little-float, Rest/binary>>, ?TYPE_32BIT, Type)
   when Type =:= double; Type =:= float ->
-    <<Value:32/little-float, Rest/binary>> = Bytes,
     {Value, Rest}.
 
 typecast(Value, SignedType)
