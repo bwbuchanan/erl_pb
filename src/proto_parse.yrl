@@ -43,9 +43,9 @@ service_body -> rpc name '(' type_name ')' returns '(' type_name ')' options ';'
 service_body -> option_spec service_body : ['$1'|'$2'].
 
 field_spec -> field_rule type_name name '=' number options ';' :
-  {field, '$1', '$2', '$3', '$5', '$6'}.
+  {field, '$1', '$2', '$3', value_of('$5'), '$6'}.
 field_spec -> field_rule group name '=' number '{' group_body '}' :
-  {field, '$1', {group, lists:reverse('$7')}, '$3', '$5', []}.
+  {field, '$1', {group, lists:reverse('$7')}, '$3', value_of('$5'), []}.
 
 field_rule -> required : required.
 field_rule -> optional : optional.
