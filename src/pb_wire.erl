@@ -163,3 +163,56 @@ decode_varint(<<0:1, I:7, Rest/binary>>, Accum) when Accum =< 16#3ffffffffffffff
 decode_varint(<<1:1, I:7, Rest/binary>>, Accum) ->
     decode_varint(Rest, Accum bsl 7 bor I).
 
+-ifdef(eunit).
+-include_lib("eunit/include/eunit.hrl").
+
+encode_test_() -> [
+    ?_assertEqual(<<0, 0>>, list_to_binary(encode(0, 0, int32))),
+    ?_assertEqual(<<0, 0>>, list_to_binary(encode(0, 0, int64))),
+    ?_assertEqual(<<8, 0>>, list_to_binary(encode(1, 0, int32))),
+    ?_assertEqual(<<16, 0>>, list_to_binary(encode(2, 0, int32))),
+    ?_assertEqual(<<5, 0, 0, 0, 0>>, list_to_binary(encode(0, 0, fixed32)))
+].
+
+encode_varint_test_() -> [
+    ?_assertEqual(0, encode_varint(0)),
+    ?_assertEqual(10, encode_varint(10)),
+    ?_assertEqual(127, encode_varint(16#7f)),
+    ?_assertEqual(<<129, 0>>, encode_varint(16#80)),
+    ?_assertEqual(<<129, 1>>, encode_varint(16#81)),
+    ?_assertEqual(<<255, 127>>, encode_varint(16#3fff)),
+    ?_assertEqual(<<129, 128, 0>>, encode_varint(16#4000)),
+    ?_assertEqual(<<129, 128, 1>>, encode_varint(16#4001)),
+    ?_assertEqual(<<255, 255, 127>>, encode_varint(16#1fffff)),
+    ?_assertEqual(<<129, 128, 128, 0>>, encode_varint(16#200000)),
+    ?_assertEqual(<<255, 255, 255, 127>>, encode_varint(16#fffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 0>>, encode_varint(16#10000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 1>>, encode_varint(16#10000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 127>>, encode_varint(16#7ffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 0>>, encode_varint(16#800000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 1>>, encode_varint(16#800000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 127>>, encode_varint(16#3ffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 0>>, encode_varint(16#40000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 1>>, encode_varint(16#40000000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#1ffffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 0>>, encode_varint(16#2000000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 1>>, encode_varint(16#2000000000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#ffffffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 0>>, encode_varint(16#100000000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 1>>, encode_varint(16#100000000000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#7fffffffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 128, 0>>, encode_varint(16#8000000000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 128, 1>>, encode_varint(16#8000000000000001)),
+    ?_assertEqual(<<129, 255, 255, 255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#ffffffffffffffff))
+].
+
+decode_varint_test_() -> [
+    ?_assertEqual({0, <<>>}, decode_varint(<<0>>)),
+    ?_assertEqual({0, <<>>}, decode_varint(<<128, 0>>)),
+    ?_assertEqual({1, <<>>}, decode_varint(<<1>>)),
+    ?_assertEqual({1, <<2, 3, 4>>}, decode_varint(<<1, 2, 3, 4>>)),
+    ?_assertEqual({128, <<2, 3, 4>>}, decode_varint(<<129, 0, 2, 3, 4>>)),
+    ?_assertEqual({16384, <<0, 0, 0>>}, decode_varint(<<129, 128, 0, 0, 0, 0>>))
+].
+
+-endif.
