@@ -1,4 +1,13 @@
+%% pb_wire.erl
+%%
+%% This module implements the wire protocol for Google Protocol Buffers.
+%%
+%% Ref: http://code.google.com/apis/protocolbuffers/docs/encoding.html
+%%
+%% Copyright (C) 2008-2009 Brian Buchanan <bwb@holo.org>
+%%
 -module(pb_wire).
+-author(bwb@holo.org).
 -export([encode/3, decode/2]).
 
 -define(TYPE_VARINT,      0).
@@ -13,6 +22,21 @@
                    sint64 | fixed32 | fixed64 | sfixed32 | sfixed64 | bool |
                    string | bytes).
 
+%%--------------------------------------------------------------------
+%% @spec encode(FieldID, Value, Type) -> iolist()
+%% @doc Encodes a field in a protocol buffer message.  Supported types are:
+%%   bool
+%%   enum
+%%   int32, uint32, sint32, fixed32, sfixed32
+%%   int64, uint64, sint64, fixed64, sfixed64
+%%   float, double
+%%   string
+%%   bytes
+%%
+%%   FieldID must be a valid protocol buffer field ID.  Value must be an Erlang
+%%   value appropriate for the specified field type.
+%% @end 
+%%--------------------------------------------------------------------
 -spec(encode/3 :: (FieldID::pb_field_id(), Value::any(), Type::pb_type()) -> iolist()).
 encode(FieldID, false, bool) ->
     encode(FieldID, 0, bool);
@@ -23,7 +47,8 @@ encode(FieldID, Integer, enum) ->
 encode(FieldID, Integer, IntType)
   when IntType =:= int32,  Integer >= -16#80000000, Integer =< 16#7fffffff;
        IntType =:= uint32, Integer band 16#ffffffff =:= Integer;
-       IntType =:= int64,  Integer >= -16#8000000000000000, Integer =< 16#7fffffffffffffff;
+       IntType =:= int64,  Integer >= -16#8000000000000000,
+           Integer =< 16#7fffffffffffffff;
        IntType =:= uint64, Integer band 16#ffffffffffffffff =:= Integer;
        IntType =:= bool, Integer band 1 =:= 1 ->
     encode_varint_field(FieldID, Integer);
@@ -52,13 +77,24 @@ encode(FieldID, String, string) when is_list(String) ->
 encode(FieldID, String, string) when is_binary(String) ->
     encode(FieldID, String, bytes);
 encode(FieldID, Bytes, bytes) when is_binary(Bytes) ->
-    [encode_field_tag(FieldID, ?TYPE_STRING), encode_varint(size(Bytes)), Bytes];
+    [encode_field_tag(FieldID, ?TYPE_STRING),
+     encode_varint(size(Bytes)), Bytes];
 encode(FieldID, Float, float) when is_float(Float) ->
     [encode_field_tag(FieldID, ?TYPE_32BIT), <<Float:32/little-float>>];
 encode(FieldID, Float, double) when is_float(Float) ->
     [encode_field_tag(FieldID, ?TYPE_64BIT), <<Float:64/little-float>>].
 
--spec(decode/2 :: (binary(), pb_type()) -> any()).
+%%--------------------------------------------------------------------
+%% @spec decode(Bytes, ExpectedType) -> {{FieldID, Value}, Remainder}
+%% @doc Decodes a protocol buffer field from an Erlang binary, returning
+%%   the field ID and value, along with a binary containing the remainder
+%%   of the input.
+%%
+%%   This function will raise a function_clause error if the expected
+%%   type of the field is not compatible with the encoded wire type.
+%% @end 
+%%--------------------------------------------------------------------
+-spec(decode/2 :: (binary(), pb_type()) -> {{pb_field_id(), any()}, binary()}).
 decode(Bytes, ExpectedType) ->
     {Tag, Rest1} = decode_varint(Bytes),
     FieldID = Tag bsr 3,
@@ -69,13 +105,17 @@ decode(Bytes, ExpectedType) ->
 decode_value(Bytes, ?TYPE_VARINT, ExpectedType) ->
     {Value, Rest} = decode_varint(Bytes),
     {typecast(Value, ExpectedType), Rest};
-decode_value(<<Value:64/little-unsigned-integer, Rest/binary>>, ?TYPE_64BIT, fixed64) ->
+decode_value(<<Value:64/little-unsigned-integer, Rest/binary>>,
+             ?TYPE_64BIT, fixed64) ->
     {Value, Rest};
-decode_value(<<Value:32/little-unsigned-integer, _:32, Rest/binary>>, ?TYPE_64BIT, fixed32) ->
+decode_value(<<Value:32/little-unsigned-integer, _:32, Rest/binary>>,
+             ?TYPE_64BIT, fixed32) ->
     {Value, Rest};
-decode_value(<<Value:64/little-signed-integer, Rest/binary>>, ?TYPE_64BIT, sfixed64) ->
+decode_value(<<Value:64/little-signed-integer, Rest/binary>>,
+             ?TYPE_64BIT, sfixed64) ->
     {Value, Rest};
-decode_value(<<Value:32/little-signed-integer, _:32, Rest/binary>>, ?TYPE_64BIT, sfixed32) ->
+decode_value(<<Value:32/little-signed-integer, _:32, Rest/binary>>,
+             ?TYPE_64BIT, sfixed32) ->
     {Value, Rest};
 decode_value(<<Value:64/little-float, Rest/binary>>, ?TYPE_64BIT, Type)
   when Type =:= double; Type =:= float ->
@@ -84,10 +124,12 @@ decode_value(Bytes, ?TYPE_STRING, ExpectedType)
   when ExpectedType =:= string; ExpectedType =:= bytes ->
     {Length, Rest} = decode_varint(Bytes),
     split_binary(Rest, Length);
-decode_value(<<Value:32/little-unsigned-integer, Rest/binary>>, ?TYPE_32BIT, Type)
+decode_value(<<Value:32/little-unsigned-integer, Rest/binary>>,
+             ?TYPE_32BIT, Type)
   when Type =:= fixed32; Type =:= fixed64 ->
     {Value, Rest};
-decode_value(<<Value:32/little-signed-integer, Rest/binary>>, ?TYPE_32BIT, Type)
+decode_value(<<Value:32/little-signed-integer, Rest/binary>>,
+             ?TYPE_32BIT, Type)
   when Type =:= sfixed32; Type =:= sfixed64 ->
     {Value, Rest};
 decode_value(<<Value:32/little-float, Rest/binary>>, ?TYPE_32BIT, Type)
@@ -108,7 +150,8 @@ typecast(Value, SignedType)
 typecast(Value, _) ->
     Value.
 
-encode_field_tag(FieldID, FieldType) when FieldID band 16#3fffffff =:= FieldID ->
+encode_field_tag(FieldID, FieldType)
+  when FieldID band 16#3fffffff =:= FieldID ->
     encode_varint((FieldID bsl 3) bor FieldType).
     
 encode_varint_field(FieldID, Integer) ->
@@ -158,7 +201,8 @@ encode_varint(I) when I band 16#ffffffffffffffff =:= I ->
 decode_varint(Bytes) ->
     decode_varint(Bytes, 0).
 
-decode_varint(<<0:1, I:7, Rest/binary>>, Accum) when Accum =< 16#3ffffffffffffff ->
+decode_varint(<<0:1, I:7, Rest/binary>>, Accum)
+  when Accum =< 16#3ffffffffffffff ->
     {Accum bsl 7 bor I, Rest};
 decode_varint(<<1:1, I:7, Rest/binary>>, Accum) ->
     decode_varint(Rest, Accum bsl 7 bor I).
@@ -169,9 +213,22 @@ decode_varint(<<1:1, I:7, Rest/binary>>, Accum) ->
 encode_test_() -> [
     ?_assertEqual(<<0, 0>>, list_to_binary(encode(0, 0, int32))),
     ?_assertEqual(<<0, 0>>, list_to_binary(encode(0, 0, int64))),
+    ?_assertEqual(<<0, 1>>, list_to_binary(encode(0, 1, int64))),
     ?_assertEqual(<<8, 0>>, list_to_binary(encode(1, 0, int32))),
     ?_assertEqual(<<16, 0>>, list_to_binary(encode(2, 0, int32))),
-    ?_assertEqual(<<5, 0, 0, 0, 0>>, list_to_binary(encode(0, 0, fixed32)))
+    ?_assertEqual(<<5, 0, 0, 0, 0>>, list_to_binary(encode(0, 0, fixed32))),
+    ?_assertEqual(<<5, 0, 0, 0, 0>>, list_to_binary(encode(0, 0.0, float))),
+    ?_assertEqual(<<5, 0, 0, 128, 63>>, list_to_binary(encode(0, 1.0, float))),
+    ?_assertEqual(<<1, 0, 0, 0, 0, 0, 0, 0, 0>>,
+                  list_to_binary(encode(0, 0.0, double))),
+    ?_assertEqual(<<1, 0, 0, 0, 0, 0, 0, 240, 63>>,
+                  list_to_binary(encode(0, 1.0, double))),
+    ?_assertEqual(<<2, 0>>, list_to_binary(encode(0, "", string))),
+    ?_assertEqual(<<2, 0>>, list_to_binary(encode(0, <<>>, string))),
+    ?_assertEqual(<<10, 0>>, list_to_binary(encode(1, <<>>, string))),
+    ?_assertEqual(<<10, 1, $a>>, list_to_binary(encode(1, <<"a">>, string))),
+    ?_assertEqual(<<10, 3, "abc">>,
+                  list_to_binary(encode(1, [<<"a">>, $b, "c"], string)))
 ].
 
 encode_varint_test_() -> [
@@ -189,21 +246,36 @@ encode_varint_test_() -> [
     ?_assertEqual(<<129, 128, 128, 128, 0>>, encode_varint(16#10000000)),
     ?_assertEqual(<<129, 128, 128, 128, 1>>, encode_varint(16#10000001)),
     ?_assertEqual(<<255, 255, 255, 255, 127>>, encode_varint(16#7ffffffff)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 0>>, encode_varint(16#800000000)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 1>>, encode_varint(16#800000001)),
-    ?_assertEqual(<<255, 255, 255, 255, 255, 127>>, encode_varint(16#3ffffffffff)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 0>>, encode_varint(16#40000000000)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 1>>, encode_varint(16#40000000001)),
-    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#1ffffffffffff)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 0>>, encode_varint(16#2000000000000)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 1>>, encode_varint(16#2000000000001)),
-    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#ffffffffffffff)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 0>>, encode_varint(16#100000000000000)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 1>>, encode_varint(16#100000000000001)),
-    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#7fffffffffffffff)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 128, 0>>, encode_varint(16#8000000000000000)),
-    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 128, 1>>, encode_varint(16#8000000000000001)),
-    ?_assertEqual(<<129, 255, 255, 255, 255, 255, 255, 255, 255, 127>>, encode_varint(16#ffffffffffffffff))
+    ?_assertEqual(<<129, 128, 128, 128, 128, 0>>,
+                  encode_varint(16#800000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 1>>,
+                  encode_varint(16#800000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 127>>,
+                  encode_varint(16#3ffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 0>>,
+                  encode_varint(16#40000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 1>>,
+                  encode_varint(16#40000000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 127>>,
+                  encode_varint(16#1ffffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 0>>,
+                  encode_varint(16#2000000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 1>>,
+                  encode_varint(16#2000000000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 255, 127>>,
+                  encode_varint(16#ffffffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 0>>,
+                  encode_varint(16#100000000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 1>>,
+                  encode_varint(16#100000000000001)),
+    ?_assertEqual(<<255, 255, 255, 255, 255, 255, 255, 255, 127>>,
+                  encode_varint(16#7fffffffffffffff)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 128, 0>>,
+                  encode_varint(16#8000000000000000)),
+    ?_assertEqual(<<129, 128, 128, 128, 128, 128, 128, 128, 128, 1>>,
+                  encode_varint(16#8000000000000001)),
+    ?_assertEqual(<<129, 255, 255, 255, 255, 255, 255, 255, 255, 127>>,
+                  encode_varint(16#ffffffffffffffff))
 ].
 
 decode_varint_test_() -> [
@@ -212,7 +284,8 @@ decode_varint_test_() -> [
     ?_assertEqual({1, <<>>}, decode_varint(<<1>>)),
     ?_assertEqual({1, <<2, 3, 4>>}, decode_varint(<<1, 2, 3, 4>>)),
     ?_assertEqual({128, <<2, 3, 4>>}, decode_varint(<<129, 0, 2, 3, 4>>)),
-    ?_assertEqual({16384, <<0, 0, 0>>}, decode_varint(<<129, 128, 0, 0, 0, 0>>))
+    ?_assertEqual({16384, <<0, 0, 0>>},
+                  decode_varint(<<129, 128, 0, 0, 0, 0>>))
 ].
 
 -endif.
