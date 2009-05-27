@@ -1,3 +1,12 @@
+%% proto_parse.yrl
+%%
+%% Parser definition for Google Protocol Buffers.
+%%
+%% Ref: http://code.google.com/apis/protocolbuffers/docs/proto.html
+%%
+%% Copyright (C) 2008-2009 Brian Buchanan <bwb@holo.org>
+%%
+
 Nonterminals file msgdef message_body extend_body service_body group_body enum_body
              field_spec field_rule option_spec options option_list
              name type_name keyword value.
