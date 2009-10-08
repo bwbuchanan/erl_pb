@@ -85,7 +85,7 @@ scan_number(String) ->
         [$.|Fraction] ->
             {B, Rest2} = scan_identifier(Fraction),
             {A + list_to_float("0." ++ B), Rest2};
-        [$e|Exp] ->
+        [E|Exp] when E =:= $E ; E =:= $e ->
             {B, Rest2} = scan_integer(Exp),
             {list_to_float(integer_to_list(A) ++ ".0e" ++ integer_to_list(B)), Rest2};
         [$x|Rest] when A =:= 0 ->
@@ -96,6 +96,9 @@ scan_number(String) ->
     end.
 
 -spec(scan_integer/1 :: (string()) -> {integer(), string()}).
+scan_integer([$-|String]) ->
+    {Int, Rest} = scan_integer(String, 0),
+    {-Int, Rest};
 scan_integer(String) ->
     scan_integer(String, 0).
 
